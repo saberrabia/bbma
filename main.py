@@ -78,11 +78,11 @@ symbols = [
     'OXT/USDT', 'HFT/USDT', 'BNT/USDT', 'LSK/USDT', 'DEFI/USDT',
 ]
 
-timeframe = '15m'
+timeframe = '1m'
 
 
 # إعداد بوت تلجرام
-TELEGRAM_API_TOKEN = '7391308695:AAGZ2pF2NwuNOTAdC9034YBeJhHrkpLPBvM'
+TELEGRAM_API_TOKEN = '7881688707:AAEHc_15-NzaGuGtwT51ZvmFOt5PKhQ0dwI'
 CHAT_ID = '7039034340'
 bot = Bot(token=TELEGRAM_API_TOKEN)
 
@@ -146,7 +146,7 @@ async def main():
                 previous_signals[symbol]['sell'] = True
                 previous_signals[symbol]['buy'] = False
 
-        await asyncio.sleep(900)  # الانتظار لمدة 15 دقيقة
+        await asyncio.sleep(60)  # الانتظار لمدة 15 دقيقة
 
 if __name__ == "__main__":
     asyncio.run(main())
