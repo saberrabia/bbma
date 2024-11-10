@@ -1,21 +1,19 @@
 import ccxt
 import pandas as pd
-import numpy as np
 import time
-import asyncio
 from telegram import Bot
 
-# إعداد مفاتيح API
-API_KEY = 'vb8XtTkcJLgNPV4YksosK2OxlLxSR29CYC7Lk9SdfRVI7bJMEMoIlom9zrpZxD27'
-API_SECRET = 'xVAsBuzajfnWnxm5BYfTuMWdhyVgsGs0EOR9DBsbxfvsOd4ZfdipQO4aZ9uVakDe'
-
-# إعداد البورصة
-exchange = ccxt.binance({
-    'apiKey': API_KEY,
-    'secret': API_SECRET,
+# إعداد اتصال مع بينانس
+binance = ccxt.binance({
+    'enableRateLimit': True  # لتجنب التكرار الزائد في الاستعلامات
 })
 
-# قائمة الرموز الزمنية
+# إعداد بيانات الاتصال بالبوت
+telegram_token = '7881688707:AAEHc_15-NzaGuGtwT51ZvmFOt5PKhQ0dwI'
+chat_id = '7039034340'
+bot = Bot(token=telegram_token)
+
+# العملات التي سيتم مراقبتها
 symbols = [
     'BTC/USDT', 'ETH/USDT', 'NEIRO/USDT', 'SOL/USDT', '1000PEPE/USDT',
      'WIF/USDT', '1MBABYDOGE/USDT', 'ENA/USDT', 'WLD/USDT',
@@ -78,76 +76,52 @@ symbols = [
     'OXT/USDT', 'HFT/USDT', 'BNT/USDT', 'LSK/USDT', 'DEFI/USDT',
 ]
 
-timeframe = '1m'
 
+# متغير لحفظ الحالة السابقة (شراء أو بيع) لكل رمز
+previous_signals = {symbol: None for symbol in symbols}
 
-# إعداد بوت تلجرام
-TELEGRAM_API_TOKEN = '7881688707:AAEHc_15-NzaGuGtwT51ZvmFOt5PKhQ0dwI'
-CHAT_ID = '7039034340'
-bot = Bot(token=TELEGRAM_API_TOKEN)
+def fetch_and_analyze(symbol):
+    global previous_signals  # نستخدم المتغير السابق من خارج الدالة
 
+    # تحميل البيانات التاريخية من بينانس
+    ohlcv = binance.fetch_ohlcv(symbol, '1m', limit=100)
 
-# دالة لجلب بيانات الشمعة
-def fetch_data(symbol):
-    ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=100)
+    # تحويل البيانات إلى DataFrame
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    return df
 
-# دالة لحساب EMA
-def calculate_ema(data, period):
-    return data['close'].ewm(span=period, adjust=False).mean()
+    # حساب مستويات الدعم والمقاومة
+    lookback_period = 20
+    df['highest_high'] = df['high'].rolling(window=lookback_period).max()
+    df['lowest_low'] = df['low'].rolling(window=lookback_period).min()
 
-# دالة لتوليد التنبيهات
-def check_signals(df):
-    df['ema_5'] = calculate_ema(df, 5)
-    df['ema_100'] = calculate_ema(df, 100)
-    df['rolling_mean'] = df['close'].rolling(window=20).mean()
-    df['rolling_std'] = df['close'].rolling(window=20).std()
-    df['upper'] = df['rolling_mean'] + (df['rolling_std'] * 2)
-    df['lower'] = df['rolling_mean'] - (df['rolling_std'] * 2)
+    # تحديد الإشارة الحالية
+    latest_row = df.iloc[-1]
+    current_signal = None
 
-    last_row = df.iloc[-1]
-    previous_row = df.iloc[-2]
+    if latest_row['high'] >= latest_row['highest_high']:
+        current_signal = "BUY"
+    elif latest_row['low'] <= latest_row['lowest_low']:
+        current_signal = "SELL"
 
-    # شروط الشراء
-    buy_signal = (last_row['close'] > last_row['upper']) and (last_row['high'] == df['high'].max()) and (last_row['ema_5'] > last_row['ema_100'])
+    # تحقق من تغيير الحالة
+    if current_signal != previous_signals[symbol]:
+        if current_signal == "BUY":
+            message = f"إشارة شراء للرمز {symbol}"
+            print(message)
+            bot.send_message(chat_id=chat_id, text=message)
+        elif current_signal == "SELL":
+            message = f"إشارة بيع للرمز {symbol}"
+            print(message)
+            bot.send_message(chat_id=chat_id, text=message)
+        
+        # تحديث الحالة السابقة
+        previous_signals[symbol] = current_signal
 
-    # شروط البيع
-    sell_signal = (last_row['close'] < last_row['lower']) and (last_row['low'] == df['low'].min()) and (last_row['ema_5'] < last_row['ema_100'])
+# الحلقة الرئيسية التي تعمل كل دقيقة
+while True:
+    for symbol in symbols:
+        fetch_and_analyze(symbol)  # تنفيذ التحليل لكل رمز
+    time.sleep(60)  # الانتظار لمدة 60 ثانية قبل التحليل التالي
 
-    return buy_signal, sell_signal
-
-# دالة لإرسال الرسالة عبر تلجرام
-async def send_message(message):
-    await bot.send_message(chat_id=CHAT_ID, text=message)
-
-# حلقة التحقق المستمرة
-async def main():
-    previous_signals = {symbol: {'buy': False, 'sell': False} for symbol in symbols}
-
-    while True:
-        for symbol in symbols:
-            df = fetch_data(symbol)
-            buy_signal, sell_signal = check_signals(df)
-
-            # طباعة التنبيهات وإرسالها عبر تلجرام
-            if buy_signal and not previous_signals[symbol]['buy']:
-                message = f"تنبيه: إشارة شراء لـ {symbol} في {df['timestamp'].iloc[-1]}"
-                print(message)
-                await send_message(message)
-                previous_signals[symbol]['buy'] = True
-                previous_signals[symbol]['sell'] = False
-
-            if sell_signal and not previous_signals[symbol]['sell']:
-                message = f"تنبيه: إشارة بيع لـ {symbol} في {df['timestamp'].iloc[-1]}"
-                print(message)
-                await send_message(message)
-                previous_signals[symbol]['sell'] = True
-                previous_signals[symbol]['buy'] = False
-
-        await asyncio.sleep(60)  # الانتظار لمدة 15 دقيقة
-
-if __name__ == "__main__":
-    asyncio.run(main())
 
