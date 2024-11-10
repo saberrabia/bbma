@@ -76,7 +76,6 @@ symbols = [
     'OXT/USDT', 'HFT/USDT', 'BNT/USDT', 'LSK/USDT', 'DEFI/USDT',
 ]
 
-
 # متغير لحفظ الحالة السابقة (شراء أو بيع) لكل رمز
 previous_signals = {symbol: None for symbol in symbols}
 
@@ -107,12 +106,12 @@ def fetch_and_analyze(symbol):
     # تحقق من تغيير الحالة
     if current_signal != previous_signals[symbol]:
         if current_signal == "BUY":
-            message = f"إشارة شراء للرمز {symbol}"
-            print(message)
+            message = f"إشارة شراء للرمز {symbol}: القمة الحالية تلامس أو تتجاوز مستوى المقاومة"
+            print(f"Sending message to {chat_id}: {message}")  # طباعة الرسالة لتتبع الكود
             bot.send_message(chat_id=chat_id, text=message)
         elif current_signal == "SELL":
-            message = f"إشارة بيع للرمز {symbol}"
-            print(message)
+            message = f"إشارة بيع للرمز {symbol}: القاع الحالي تلامس أو تتجاوز مستوى الدعم"
+            print(f"Sending message to {chat_id}: {message}")  # طباعة الرسالة لتتبع الكود
             bot.send_message(chat_id=chat_id, text=message)
         
         # تحديث الحالة السابقة
@@ -123,5 +122,4 @@ while True:
     for symbol in symbols:
         fetch_and_analyze(symbol)  # تنفيذ التحليل لكل رمز
     time.sleep(60)  # الانتظار لمدة 60 ثانية قبل التحليل التالي
-
 
