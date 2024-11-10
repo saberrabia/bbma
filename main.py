@@ -94,11 +94,11 @@ def check_buy_sell_signals(df):
 
         # تحقق من إشارة شراء (BUY)
         if current_low <= highest_high and current_high >= highest_high:
-            signals.append("BUY")
+            signals.append("شراء 🟢")
 
         # تحقق من إشارة بيع (SELL)
         elif current_high >= lowest_low and current_low <= lowest_low:
-            signals.append("SELL")
+            signals.append("بيع 🔴")
 
         # في حالة عدم وجود إشارة
         else:
@@ -135,7 +135,7 @@ def main():
             if signals:
                 current_signal = signals[-1]
                 if previous_signals[symbol] != current_signal and current_signal != "NO SIGNAL":
-                    message = f"إشارة {current_signal} للعملة {symbol}!"
+                    message = f"إشارة {current_signal} للعملة {symbol}"
                     send_telegram_message(message)
                     print(message)
                     previous_signals[symbol] = current_signal
