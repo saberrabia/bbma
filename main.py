@@ -1,13 +1,19 @@
 import ccxt
 import pandas as pd
 import time
+from telegram import Bot
 
-# إعداد اتصال مع بينانس بدون API Key
+# إعداد اتصال مع بينانس
 binance = ccxt.binance({
     'enableRateLimit': True  # لتجنب التكرار الزائد في الاستعلامات
 })
 
-# قائمة العملات التي نريد مراقبتها
+# إعداد بيانات الاتصال بالبوت
+telegram_token = '7881688707:AAEHc_15-NzaGuGtwT51ZvmFOt5PKhQ0dwI'
+chat_id = '7039034340'
+bot = Bot(token=telegram_token)
+
+# العملات التي سيتم مراقبتها
 symbols = [
     'BTC/USDT', 'ETH/USDT', 'NEIRO/USDT', 'SOL/USDT', '1000PEPE/USDT',
     'WIF/USDT', '1MBABYDOGE/USDT', 'ENA/USDT', 'WLD/USDT', 'POPCAT/USDT',
@@ -85,10 +91,14 @@ def fetch_and_analyze(symbol):
     # تحقق من تغيير الحالة
     if current_signal != previous_signals[symbol]:
         if current_signal == "BUY":
-            print(f"إشارة شراء للرمز {symbol}")
+            message = f"إشارة شراء للرمز {symbol}: القمة الحالية تلامس أو تتجاوز مستوى المقاومة"
+            print(message)
+            bot.send_message(chat_id=chat_id, text=message)
         elif current_signal == "SELL":
-            print(f"إشارة بيع للرمز {symbol}")
-
+            message = f"إشارة بيع للرمز {symbol}: القاع الحالي تلامس أو تتجاوز مستوى الدعم"
+            print(message)
+            bot.send_message(chat_id=chat_id, text=message)
+        
         # تحديث الحالة السابقة
         previous_signals[symbol] = current_signal
 
