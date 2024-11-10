@@ -1,7 +1,9 @@
 import ccxt
 import pandas as pd
 import asyncio
-from telegram import Bot
+from telegram import Bot, ParseMode
+from telegram.ext import ApplicationBuilder
+from datetime import datetime, timedelta
 
 # إعداد اتصال مع بينانس
 binance = ccxt.binance({
@@ -28,20 +30,20 @@ symbols = [
 # متغير لحفظ الحالة السابقة (شراء أو بيع) لكل رمز
 previous_signals = {symbol: None for symbol in symbols}
 
-# إنشاء Semaphore لحد تحديد عدد الرسائل المرسلة في نفس الوقت
-semaphore = asyncio.Semaphore(10)  # يمكنك تحديد العدد بناءً على احتياجاتك
+# Semaphore لتحكم في عدد الرسائل المرسلة في وقت واحد
+semaphore = asyncio.Semaphore(10)
 
 # دالة غير متزامنة لإرسال الرسالة عبر تلغرام
 async def send_message_to_telegram(message):
-    async with semaphore:  # تأكد من أن عدد الرسائل المرسلة في نفس الوقت محدود
+    async with semaphore:
         try:
-            await bot.send_message(chat_id=chat_id, text=message)
+            await bot.send_message(chat_id=chat_id, text=message, parse_mode=ParseMode.MARKDOWN)
         except Exception as e:
             print(f"فشل في إرسال الرسالة: {e}")
 
 # دالة لتحميل البيانات وتحليلها
 async def fetch_and_analyze(symbol):
-    global previous_signals  # نستخدم المتغير السابق من خارج الدالة
+    global previous_signals
 
     # تحميل البيانات التاريخية من بينانس
     ohlcv = binance.fetch_ohlcv(symbol, '1m', limit=100)
@@ -74,7 +76,7 @@ async def fetch_and_analyze(symbol):
             message = f"إشارة بيع للرمز {symbol}: القاع الحالي تلامس أو تتجاوز مستوى الدعم"
             print(message)
             await send_message_to_telegram(message)
-        
+
         # تحديث الحالة السابقة
         previous_signals[symbol] = current_signal
 
@@ -82,8 +84,7 @@ async def fetch_and_analyze(symbol):
 async def main():
     while True:
         tasks = [fetch_and_analyze(symbol) for symbol in symbols]
-        # تنفيذ جميع المهام بشكل غير متزامن
-        await asyncio.gather(*tasks)
+        await asyncio.gather(*tasks)  # تنفيذ جميع المهام بشكل غير متزامن
         await asyncio.sleep(60)  # الانتظار لمدة 60 ثانية قبل التحليل التالي
 
 # تشغيل الحلقة غير المتزامنة باستخدام asyncio
