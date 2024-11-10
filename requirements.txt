@@ -3,5 +3,4 @@ pandas
 numpy
 python-telegram-bot
 asyncio 
-time
 requests 
