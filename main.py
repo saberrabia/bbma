@@ -23,15 +23,21 @@ symbols = [
     'APT/USDT', 'UNI/USDT', 'AXL/USDT', 'BANANA/USDT', 'CATI/USDT', 'ARKM/USDT',
     'FET/USDT', 'NOT/USDT', 'NEAR/USDT', '1000SATS/USDT', 'BOME/USDT', 'CELO/USDT',
     'DIA/USDT', '1000BONK/USDT', 'MYRO/USDT', '1000FLOKI/USDT', 'ARK/USDT', 'HMSTR/USDT',
-    # ... يمكن إضافة المزيد من العملات هنا
 ]
 
 # متغير لحفظ الحالة السابقة (شراء أو بيع) لكل رمز
 previous_signals = {symbol: None for symbol in symbols}
 
+# إنشاء Semaphore لحد تحديد عدد الرسائل المرسلة في نفس الوقت
+semaphore = asyncio.Semaphore(10)  # يمكنك تحديد العدد بناءً على احتياجاتك
+
 # دالة غير متزامنة لإرسال الرسالة عبر تلغرام
 async def send_message_to_telegram(message):
-    await bot.send_message(chat_id=chat_id, text=message)
+    async with semaphore:  # تأكد من أن عدد الرسائل المرسلة في نفس الوقت محدود
+        try:
+            await bot.send_message(chat_id=chat_id, text=message)
+        except Exception as e:
+            print(f"فشل في إرسال الرسالة: {e}")
 
 # دالة لتحميل البيانات وتحليلها
 async def fetch_and_analyze(symbol):
