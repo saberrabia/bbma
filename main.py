@@ -1,6 +1,6 @@
 import ccxt
 import pandas as pd
-import asyncio
+import time
 from telegram import Bot
 
 # إعداد اتصال مع بينانس
@@ -9,10 +9,9 @@ binance = ccxt.binance({
 })
 
 # إعداد بيانات الاتصال بالبوت
-telegram_token = '7881688707:AAEHc_15-NzaGuGtwT51ZvmFOt5PKhQ0dwI'
-chat_id = '7039034340'
+telegram_token = '7881688707:AAEHc_15-NzaGuGtwT51ZvmFOt5PKhQ0dwI'  # استبدل بـ API Token الخاص بك
+chat_id = '7039034340'  # استبدل بـ chat_id الخاص بك
 bot = Bot(token=telegram_token)
-
 
 # العملات التي سيتم مراقبتها
 symbols = [
@@ -81,11 +80,7 @@ symbols = [
 # متغير لحفظ الحالة السابقة (شراء أو بيع) لكل رمز
 previous_signals = {symbol: None for symbol in symbols}
 
-# دالة غير متزامنة لإرسال التنبيهات عبر تلغرام
-async def send_telegram_alert(message):
-    await bot.send_message(chat_id=chat_id, text=message)
-
-async def fetch_and_analyze(symbol):
+def fetch_and_analyze(symbol):
     global previous_signals  # نستخدم المتغير السابق من خارج الدالة
 
     # تحميل البيانات التاريخية من بينانس
@@ -114,23 +109,18 @@ async def fetch_and_analyze(symbol):
         if current_signal == "BUY":
             message = f"إشارة شراء للرمز {symbol}: القمة الحالية تلامس أو تتجاوز مستوى المقاومة"
             print(f"Sending message to {chat_id}: {message}")  # طباعة الرسالة لتتبع الكود
-            await send_telegram_alert(message)
+            bot.send_message(chat_id=chat_id, text=message)
         elif current_signal == "SELL":
             message = f"إشارة بيع للرمز {symbol}: القاع الحالي تلامس أو تتجاوز مستوى الدعم"
             print(f"Sending message to {chat_id}: {message}")  # طباعة الرسالة لتتبع الكود
-            await send_telegram_alert(message)
+            bot.send_message(chat_id=chat_id, text=message)
         
         # تحديث الحالة السابقة
         previous_signals[symbol] = current_signal
 
 # الحلقة الرئيسية التي تعمل كل دقيقة
-async def main():
-    while True:
-        for symbol in symbols:
-            await fetch_and_analyze(symbol)  # تنفيذ التحليل لكل رمز
-        await asyncio.sleep(60)  # الانتظار لمدة 60 ثانية قبل التحليل التالي
-
-# تشغيل الحلقة غير المتزامنة
-asyncio.run(main())
-
+while True:
+    for symbol in symbols:
+        fetch_and_analyze(symbol)  # تنفيذ التحليل لكل رمز
+    time.sleep(60)  # الانتظار لمدة 60 ثانية قبل التحليل التالي
 
