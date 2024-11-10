@@ -76,7 +76,6 @@ symbols = [
     'OXT/USDT', 'HFT/USDT', 'BNT/USDT', 'LSK/USDT', 'DEFI/USDT',
 ]
 
-
 # متغير لحفظ الحالة السابقة (شراء أو بيع) لكل رمز
 previous_signals = {symbol: None for symbol in symbols}
 
@@ -123,4 +122,3 @@ while True:
     for symbol in symbols:
         fetch_and_analyze(symbol)  # تنفيذ التحليل لكل رمز
     time.sleep(60)  # الانتظار لمدة 60 ثانية قبل التحليل التالي
-
