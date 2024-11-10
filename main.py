@@ -1,15 +1,14 @@
 import ccxt
-import pandas as pd
-import numpy as np
 import time
 import asyncio
-from telegram import Bot
+from telegram import Update
+from telegram.ext import ApplicationBuilder
 
-# إعداد البورصة
+# إعدادات
 exchange = ccxt.binance()
 symbols = [
     'BTC/USDT', 'ETH/USDT', 'NEIRO/USDT', 'SOL/USDT', '1000PEPE/USDT',
-     'WIF/USDT', '1MBABYDOGE/USDT', 'ENA/USDT', 'WLD/USDT',
+    'WIF/USDT', '1MBABYDOGE/USDT', 'ENA/USDT', 'WLD/USDT',
     'POPCAT/USDT', 'EIGEN/USDT', 'DOGE/USDT', 'DOGS/USDT', 'SAGA/USDT',
     'TAO/USDT', 'TIA/USDT', 'SEI/USDT', 'SXP/USDT', 'REEF/USDT',
     'TURBO/USDT', 'BNB/USDT', '1000SHIB/USDT', 'ORDI/USDT', 'FTM/USDT',
@@ -68,75 +67,80 @@ symbols = [
     'ARPA/USDT', 'DENT/USDT', 'XEM/USDT', 'BTCDOM/USDT', 'COMBO/USDT',
     'OXT/USDT', 'HFT/USDT', 'BNT/USDT', 'LSK/USDT', 'DEFI/USDT',
 ]
-timeframe = '15m'
-
 
 # إعداد بوت تلجرام
-TELEGRAM_API_TOKEN = '7881688707:AAEHc_15-NzaGuGtwT51ZvmFOt5PKhQ0dwI'  # استبدل بـ API Token الخاص بك
-CHAT_ID = '7039034340'
-bot = Bot(token=TELEGRAM_API_TOKEN)
+TELEGRAM_TOKEN = '7881688707:AAEHc_15-NzaGuGtwT51ZvmFOt5PKhQ0dwI'  # استبدل بـ API Token الخاص بك 
+CHAT_ID = '7039034340'  # ضع الـ chat ID هنا
 
-# دالة للحصول على بيانات الشمعة
-def fetch_data(symbol):
-    ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=100)
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    return df
+# قائمة لتتبع آخر 20 عملة تم إرسال إشعار عنها
+recently_notified = []
 
-# دالة لحساب EMA
-def calculate_ema(data, period):
-    return data['close'].ewm(span=period, adjust=False).mean()
+# دالة لجلب تغييرات الأسعار في آخر 24 ساعة
+def fetch_24h_changes():
+    changes = {}
+    for symbol in symbols:
+        ticker = exchange.fetch_ticker(symbol)
+        changes[symbol] = ticker['percentage']  # نسبة التغيير في آخر 24 ساعة
+    return changes
 
-# دالة لتوليد التنبيهات
-def check_signals(df):
-    df['ema_5'] = calculate_ema(df, 5)
-    df['ema_100'] = calculate_ema(df, 100)
-    df['rolling_mean'] = df['close'].rolling(window=20).mean()
-    df['rolling_std'] = df['close'].rolling(window=20).std()
-    df['upper'] = df['rolling_mean'] + (df['rolling_std'] * 2)
-    df['lower'] = df['rolling_mean'] - (df['rolling_std'] * 2)
+# دالة لتحديد العملات الصاعدة
+def check_top_up(changes):
+    valid_changes = {symbol: change for symbol, change in changes.items() if change is not None}
+    sorted_changes = sorted(valid_changes.items(), key=lambda x: x[1])
+    
+    top_up = sorted_changes[-10:]  # أعلى 10 عملات صعودًا
+    return top_up
 
-    last_row = df.iloc[-1]
-    previous_row = df.iloc[-2]
+# قائمة لتتبع العملات في القوائم
+tracked_up = set()
 
-    # شروط الشراء
-    buy_signal = (last_row['close'] > last_row['upper']) and (last_row['high'] == df['high'].max()) and (last_row['ema_5'] > last_row['ema_100'])
-
-    # شروط البيع
-    sell_signal = (last_row['close'] < last_row['lower']) and (last_row['low'] == df['low'].min()) and (last_row['ema_5'] < last_row['ema_100'])
-
-    return buy_signal, sell_signal
+# إعداد تطبيق تلجرام
+app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
 # دالة لإرسال الرسالة عبر تلجرام
-async def send_message(message):
-    await bot.send_message(chat_id=CHAT_ID, text=message)
+async def send_message(symbol, change):
+    global recently_notified
+    if symbol not in recently_notified:
+        await app.bot.send_message(chat_id=CHAT_ID, text=f"عملة حالياً في قائمة أعلى 10: {symbol} - تغيير: {change:.2f}%")
+        
+        # إضافة العملة إلى القائمة
+        recently_notified.append(symbol)
+        
+        # الاحتفاظ بحدود 20 عملة فقط
+        if len(recently_notified) > 20:
+            recently_notified.pop(0)  # إزالة أقدم عملة إذا تجاوز العدد 20
 
-# حلقة التحقق المستمرة
-async def main():
-    previous_signals = {symbol: {'buy': False, 'sell': False} for symbol in symbols}
+# دالة للمراقبة
+async def monitor():
+    global tracked_up
+    initial_changes = fetch_24h_changes()
+    top_up = check_top_up(initial_changes)
+
+    # إضافة العملات الأولى للقوائم
+    for symbol, change in top_up:
+        tracked_up.add(symbol)
+        print(f"عملة حالياً في قائمة أعلى 10: {symbol} - تغيير: {change:.2f}%")
+        await send_message(symbol, change)
 
     while True:
-        for symbol in symbols:
-            df = fetch_data(symbol)
-            buy_signal, sell_signal = check_signals(df)
+        changes = fetch_24h_changes()
+        await asyncio.sleep(60)  # الانتظار دقيقة
 
-            # طباعة التنبيهات وإرسالها عبر تلجرام
-            if buy_signal and not previous_signals[symbol]['buy']:
-                message = f"تنبيه: إشارة شراء لـ {symbol} في {df['timestamp'].iloc[-1]}"
-                print(message)
-                await send_message(message)
-                previous_signals[symbol]['buy'] = True
-                previous_signals[symbol]['sell'] = False
+        top_up = check_top_up(changes)
 
-            if sell_signal and not previous_signals[symbol]['sell']:
-                message = f"تنبيه: إشارة بيع لـ {symbol} في {df['timestamp'].iloc[-1]}"
-                print(message)
-                await send_message(message)
-                previous_signals[symbol]['sell'] = True
-                previous_signals[symbol]['buy'] = False
+        # طباعة العملات الصاعدة
+        for symbol, change in top_up:
+            if symbol not in tracked_up:
+                print(f"عملة دخلت قائمة أعلى 10: {symbol} - تغيير: {change:.2f}%")
+                await send_message(symbol, change)
+                tracked_up.add(symbol)
 
-        await asyncio.sleep(900)  # الانتظار لمدة 15 دقيقة قبل التحقق مرة أخرى
+        # تحديث القوائم
+        for symbol in list(tracked_up):
+            if symbol not in dict(top_up):
+                print(f"عملة خرجت من قائمة أعلى 10: {symbol}")
+                tracked_up.remove(symbol)
 
-if __name__ == "__main__":
-    asyncio.run(main())
-
+# بدء العملية
+if __name__ == '__main__':
+    asyncio.run(monitor()) 
