@@ -1,12 +1,12 @@
 import ccxt
 import pandas as pd
-import time
 import requests
+import time
 
 # إعداد الاتصال بمنصة بينانس باستخدام ccxt
 exchange = ccxt.binance()
 
-# قائمة الرموز التي نريد مراقبتها
+# قائمة العملات
 symbols = [
     'BTC/USDT', 'ETH/USDT', 'NEIRO/USDT', 'SOL/USDT', '1000PEPE/USDT',
     'WIF/USDT', '1MBABYDOGE/USDT', 'ENA/USDT', 'WLD/USDT', 'POPCAT/USDT',
@@ -71,7 +71,7 @@ timeframe = '1m'  # الإطار الزمني 1 دقيقة
 lookback_period = 100  # فترة النظر لحساب أعلى قمة وأدنى قاع
 
 # دالة لتحميل البيانات من منصة بينانس
-def get_ohlcv(symbol, timeframe='1m', limit=110):
+def get_ohlcv(symbol, timeframe='1m', limit=100):
     ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
     # تحويل البيانات إلى DataFrame
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -94,11 +94,11 @@ def check_buy_sell_signals(df):
 
         # تحقق من إشارة شراء (BUY)
         if current_low <= highest_high and current_high >= highest_high:
-            signals.append("شراء")
+            signals.append("BUY")
 
         # تحقق من إشارة بيع (SELL)
         elif current_high >= lowest_low and current_low <= lowest_low:
-            signals.append("بيع")
+            signals.append("SELL")
 
         # في حالة عدم وجود إشارة
         else:
@@ -123,19 +123,24 @@ def main():
             # تحميل البيانات (أحدث 100 شمعة)
             df = get_ohlcv(symbol, timeframe='1m', limit=100)
 
+            # التأكد من أن البيانات تحتوي على ما يكفي من الشموع
+            if len(df) < lookback_period:
+                print(f"البيانات غير كافية للعملة {symbol}")
+                continue  # تخطي هذه الدورة والانتقال للعملة التالية
+
             # حساب الإشارات بناءً على البيانات
             signals = check_buy_sell_signals(df)
 
-            # الحصول على الإشارة من آخر شمعة (الشمعة الأخيرة)
-            current_signal = signals[-1]
-
-            # طباعة التنبيه فقط إذا تغيرت الإشارة
-            if previous_signals[symbol] != current_signal and current_signal != "NO SIGNAL":
-                message = f"إشارة {current_signal} للعملة {symbol}"
-                send_telegram_message(message)  # إرسال التنبيه عبر تلجرام
-                print(message)  # طباعة التنبيه في الكونسول
-                # تحديث الإشارة السابقة
-                previous_signals[symbol] = current_signal
+            # التحقق من أن قائمة الإشارات ليست فارغة
+            if signals:
+                current_signal = signals[-1]
+                if previous_signals[symbol] != current_signal and current_signal != "NO SIGNAL":
+                    message = f"إشارة {current_signal} للعملة {symbol}!"
+                    send_telegram_message(message)
+                    print(message)
+                    previous_signals[symbol] = current_signal
+            else:
+                print(f"لا توجد إشارات للعملة {symbol} في هذه اللحظة.")
 
         # الانتظار لمدة دقيقة قبل التحقق مرة أخرى
         time.sleep(60)
